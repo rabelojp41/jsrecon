@@ -1,0 +1,17 @@
+<!doctype html>
+<html>
+<head>
+  <title>Exemplo App</title>
+  <link rel="modulepreload" href="/static/vendor.js">
+  <script type="application/ld+json">{"@context": "https://schema.org"}</script>
+  <script type="importmap">{"imports": {"utils": "/static/utils.js"}}</script>
+</head>
+<body>
+  <script src="/static/app.js"></script>
+  <script src="https://cdn.terceiro.com/lib.js"></script>
+  <script>
+    window.CONFIG = { apiBase: "https://api.exemplo.com/v1", env: "prod" };
+    fetch("/api/session", { method: "POST" });
+  </script>
+</body>
+</html>

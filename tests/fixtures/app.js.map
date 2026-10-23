@@ -1,0 +1,1 @@
+{"version":3,"file":"app.js","sources":["webpack://app/./src/api.ts","webpack://app/./node_modules/react/index.js"],"sourcesContent":["export const ADMIN = '/internal/admin/reset';\nconst slack = 'xoxb-1234567890-abcdefghijklmnop';\n","module.exports = require('./react.production.min.js');"],"mappings":"AAAA"}

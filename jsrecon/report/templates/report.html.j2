@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>jsrecon — {{ d.meta.target }}</title>
+<style>
+  :root {
+    --bg: #ffffff; --fg: #1d2330; --muted: #5d6677; --line: #d9dee7; --head: #f3f5f9;
+    --ok: #1a7f37; --warn: #9a6700; --bad: #cf222e; --bad-bg: #ffebe9; --code: #f6f8fa;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f141b; --fg: #e3e8ef; --muted: #94a0b2; --line: #2a3340; --head: #18202a;
+      --ok: #3fb950; --warn: #d29922; --bad: #f85149; --bad-bg: #3a1618; --code: #18202a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 14px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 1200px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 17px; margin: 32px 0 8px; padding-bottom: 4px; border-bottom: 1px solid var(--line); }
+  .meta { color: var(--muted); margin: 0 0 8px; }
+  .meta b { color: var(--fg); font-weight: 600; }
+  .note { color: var(--muted); font-size: 13px; margin: 4px 0 8px; }
+  .scroll { overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; vertical-align: top; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+  th { background: var(--head); font-weight: 600; white-space: nowrap; }
+  td { overflow-wrap: break-word; }
+  td:not(:first-child) { overflow-wrap: anywhere; }
+  code { font: 12px ui-monospace, SFMono-Regular, Consolas, monospace; background: var(--code);
+         padding: 1px 4px; border-radius: 4px; }
+  .s-ok { color: var(--ok); font-weight: 600; white-space: nowrap; }
+  .s-warn { color: var(--warn); font-weight: 600; white-space: nowrap; }
+  .s-bad { color: var(--bad); font-weight: 600; white-space: nowrap; }
+  tr.high td { background: var(--bad-bg); }
+  .c-alta { color: var(--bad); font-weight: 700; }
+  .c-média { color: var(--warn); font-weight: 600; }
+  .c-baixa { color: var(--muted); }
+  .sev-crítica { color: var(--bad); font-weight: 700; }
+  .sev-alta { color: var(--bad); }
+  .sev-média { color: var(--warn); }
+  .sev-baixa, .sev-nenhuma, .sev-desconhecida { color: var(--muted); }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<main>
+  {% set req = d.requests or {} %}
+  <h1>jsrecon — {{ d.meta.target }}</h1>
+  <p class="meta">
+    <b>Modo:</b> {{ d.meta.mode }} ·
+    <b>Escopo:</b> {{ (d.meta.scope.domains + d.meta.scope.networks) | join(", ") }}
+    {% if d.meta.scope.excluded %}(exclusões: {{ d.meta.scope.excluded | join(", ") }}){% endif %}
+  </p>
+  <p class="meta">
+    <b>Execução:</b> {{ d.meta.started_at }} → {{ d.meta.finished_at }} ·
+    <b>Requisições:</b> {{ req.active or 0 }} ativas, {{ req.passive or 0 }} passivas,
+    {{ (req.blocked or []) | length }} bloqueadas pelo escopo ·
+    <b>Secrets:</b> {{ "revelados (--reveal)" if reveal else "mascarados" }}
+  </p>
+
+  <h2>Resumo</h2>
+  <div class="scroll"><table>
+    <tr><th>Módulo</th><th>Status</th><th>Achados</th><th>Observação</th></tr>
+    {% for m in d.summary %}
+    {% set cls = "s-ok" if m.status in ("COM ACHADOS", "SEM ACHADOS") else ("s-bad" if m.status == "FALHA" else "s-warn") %}
+    {% set icon = "✔" if cls == "s-ok" else ("✖" if cls == "s-bad" else "⚠") %}
+    <tr><td>{{ m.title }}</td><td class="{{ cls }}">{{ icon }} {{ m.status }}</td>
+        <td>{{ "–" if m.findings is none else m.findings }}</td><td>{{ m.note }}</td></tr>
+    {% endfor %}
+  </table></div>
+
+  {% if d.secrets %}
+  <h2>Secrets ({{ d.secrets | length }})</h2>
+  <div class="scroll"><table>
+    <tr><th>Tipo</th><th>Valor</th><th>Confiança</th><th>Arquivo:linha</th><th>Origem</th><th>Nota</th></tr>
+    {% for s in d.secrets %}
+    <tr class="{{ 'high' if s.confidence == 'alta' else '' }}">
+      <td>{{ s.type }}</td><td><code>{{ s.value }}</code></td>
+      <td class="c-{{ s.confidence }}">{{ s.confidence }}</td>
+      <td>{{ s.file }}:{{ s.line }}</td><td>{{ s.origin }}</td><td>{{ s.note or "" }}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+
+  {% if d.endpoints %}
+  <h2>Endpoints ({{ d.endpoints | length }})</h2>
+  <div class="scroll"><table>
+    <tr><th>Método</th><th>Rota</th><th>Tipo</th><th>Arquivo:linha</th><th>Origem</th><th>Probe</th></tr>
+    {% for e in d.endpoints %}
+    {% set loc = e.locations[0] %}
+    <tr><td>{{ e.method }}</td><td><code>{{ e.value }}</code></td><td>{{ e.kind }}</td>
+        <td>{{ loc.file }}:{{ loc.line }}{% if e.locations | length > 1 %} (+{{ e.locations | length - 1 }}){% endif %}</td>
+        <td>{{ e.origin }}</td><td>{{ e.probe_status or e.probe_note or "" }}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+
+  {% if d.cdn_waf %}
+  <h2>CDN/WAF</h2>
+  <p class="note">IPs resolvidos: {{ d.cdn_waf.ips | join(", ") or "–" }} —
+    <b>{{ "atrás de CDN/WAF" if d.cdn_waf.behind_cdn else "nenhum CDN/WAF identificado" }}</b></p>
+  {% if d.cdn_waf.providers %}
+  <div class="scroll"><table>
+    <tr><th>Provedor</th><th>Evidência</th><th>Evidência forte</th></tr>
+    {% for p in d.cdn_waf.providers %}
+    <tr><td>{{ p.provider }}</td><td>{{ p.evidence | join("<br>" | safe) }}</td><td>{{ "sim" if p.strong else "não" }}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+  {% endif %}
+
+  {% if d.origin_candidates %}
+  <h2>IPs de origem ({{ d.origin_candidates | length }})</h2>
+  <p class="note">Sem validação, um IP é apenas <b>candidato</b>.</p>
+  <div class="scroll"><table>
+    <tr><th>IP</th><th>Fonte</th><th>Score</th><th>Validado</th><th>Veredito</th><th>Observação</th></tr>
+    {% for o in d.origin_candidates %}
+    <tr><td>{{ o.ip }}</td><td>{{ o.sources | join(", ") }}</td>
+        <td>{{ "–" if o.score is none else "%d%%" | format(o.score * 100) }}</td>
+        <td>{{ "sim" if o.validated else "não" }}</td><td>{{ o.verdict }}</td>
+        <td>{{ o.details.get("validação", "") }}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+  {% if d.favicon_mmh3 is not none %}
+  <p class="note">Favicon mmh3: <code>{{ d.favicon_mmh3 }}</code> (Shodan: <code>http.favicon.hash:{{ d.favicon_mmh3 }}</code>)</p>
+  {% endif %}
+
+  {% if d.shodan %}
+  <h2>Shodan ({{ d.shodan | length }})</h2>
+  <p class="note">CVEs são potenciais: inferidos da versão do banner, não confirmados.</p>
+  <div class="scroll"><table>
+    <tr><th>IP</th><th>Papel</th><th>Org/ASN</th><th>Portas</th><th>Serviços/versões</th><th>CVEs (potenciais)</th><th>Fonte</th></tr>
+    {% for h in d.shodan %}
+    <tr><td>{{ h.ip }}</td><td>{{ h.role }}</td>
+        <td>{{ [h.org, h.asn] | select | join(" / ") or "–" }}{% if h.is_cdn_edge %}<br><span class="s-warn">borda {{ h.is_cdn_edge }}</span>{% endif %}</td>
+        <td>{{ h.ports | join(", ") or "–" }}</td><td>{{ h.services | join("<br>" | safe) or "–" }}</td>
+        <td>{{ h.cves | join(", ") or "–" }}</td><td>{{ h.source }}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+
+  {% if d.cve_intel %}
+  <h2>CVEs potenciais ({{ d.cve_intel | length }})</h2>
+  <p class="note">Inferidas da versão do banner (Shodan), não confirmadas. Ordenadas por KEV, CVSS e EPSS.
+    EPSS = probabilidade de exploração em 30 dias; KEV = catálogo CISA de vulnerabilidades exploradas.</p>
+  <div class="scroll"><table>
+    <tr><th>CVE</th><th>Severidade</th><th>EPSS</th><th>KEV</th><th>IPs</th><th>Publicada</th><th>Resumo</th></tr>
+    {% for c in d.cve_intel %}
+    <tr class="{{ 'high' if c.kev else '' }}">
+      <td><a href="{{ c.url }}" target="_blank" rel="noopener noreferrer">{{ c.id }}</a></td>
+      <td class="sev-{{ c.severity }}">{% if c.found %}{{ c.severity }}{% if c.cvss is not none %} ({{ "%.1f" | format(c.cvss) }}){% endif %}{% else %}sem dados{% endif %}</td>
+      <td>{{ "–" if c.epss is none else "%.1f%%" | format(c.epss * 100) }}</td>
+      <td class="{{ 's-bad' if c.kev else '' }}">{{ "SIM" if c.kev else "não" }}</td>
+      <td>{{ c.ips | join(", ") }}</td><td>{{ c.published or "–" }}</td><td>{{ c.summary or "–" }}</td>
+    </tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+
+  {% if d.subdomains %}
+  <h2>Subdomínios descobertos ({{ d.subdomains | length }})</h2>
+  <div class="scroll"><table>
+    <tr><th>Host</th><th>Fonte</th><th>No escopo</th></tr>
+    {% for s in d.subdomains %}
+    <tr><td>{{ s.host }}</td><td>{{ s.source }}</td>
+        <td class="{{ 's-ok' if s.in_scope else 's-bad' }}">{{ "sim" if s.in_scope else "fora do escopo" }}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+
+  {% if d.js_files %}
+  <h2>Arquivos JS ({{ d.js_files | length }})</h2>
+  <div class="scroll"><table>
+    <tr><th>Arquivo</th><th>Origem</th><th>Fonte</th><th>Tamanho</th></tr>
+    {% for f in d.js_files %}
+    <tr><td>{{ f.label }}</td><td>{{ f.origin }}</td><td>{{ f.source }}</td><td>{{ f.size }}</td></tr>
+    {% endfor %}
+  </table></div>
+  {% endif %}
+
+  {% set skipped = (req.blocked or []) + d.js_skipped %}
+  {% if skipped %}
+  <h2>Bloqueado / ignorado pelo escopo ({{ skipped | length }})</h2>
+  <div class="scroll"><table>
+    <tr><th>URL</th><th>Motivo</th></tr>
+    {% for b in skipped %}<tr><td>{{ b.url }}</td><td>{{ b.reason }}</td></tr>{% endfor %}
+  </table></div>
+  {% endif %}
+
+  {% if d.warnings %}
+  <h2>Avisos</h2>
+  <ul>{% for w in d.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+  {% endif %}
+</main>
+</body>
+</html>

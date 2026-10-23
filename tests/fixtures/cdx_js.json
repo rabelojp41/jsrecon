@@ -1,0 +1,6 @@
+[["timestamp","original","digest","statuscode","mimetype"],
+["20190101000000","https://exemplo.com/static/old.js","DIGEST_A","200","application/javascript"],
+["20200101000000","https://exemplo.com/static/old.js","DIGEST_A","200","application/javascript"],
+["20210101000000","https://www.exemplo.com/static/legacy.js?v=2","DIGEST_B","200","application/javascript"],
+["20210101000000","https://legado.exemplo.com/x.js","DIGEST_C","200","application/javascript"],
+["20220101000000","https://exemplo.com/static/app.js","DIGEST_D","200","application/javascript"]]
